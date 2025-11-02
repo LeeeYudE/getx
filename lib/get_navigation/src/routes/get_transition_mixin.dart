@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import '../../../get.dart';
 import 'default_transitions.dart';
@@ -56,7 +57,6 @@ class CupertinoBackGestureController<T> {
       //(Platform.isIOS)? velocity <= 0 : true
       animateForward = velocity <= 0;
     } else {
-
       animateForward = controller.value > 0.7;
     }
     if (animateForward) {
@@ -172,7 +172,7 @@ class CupertinoBackGestureDetectorState<T> extends State<CupertinoBackGestureDet
       ..onUpdate = _handleDragUpdate
       ..onEnd = _handleDragEnd
       ..onCancel = _handleDragCancel
-      ..gestureSettings = const DeviceGestureSettings(touchSlop:kTouchSlop);
+      ..gestureSettings = const DeviceGestureSettings(touchSlop: kTouchSlop);
   }
 
   double _convertToLogical(double value) {
@@ -203,7 +203,7 @@ class CupertinoBackGestureDetectorState<T> extends State<CupertinoBackGestureDet
   void _handleDragStart(DragStartDetails details) {
     assert(mounted);
     assert(_backGestureController == null);
-    if(Platform.isAndroid){
+    if (Platform.isAndroid) {
       assert(details.globalPosition.dx > 60);
     }
     _backGestureController = widget.onStartPopGesture();
@@ -215,9 +215,50 @@ class CupertinoBackGestureDetectorState<T> extends State<CupertinoBackGestureDet
     _backGestureController!.dragUpdate(_convertToLogical(details.primaryDelta! / context.size!.width));
   }
 
-  void _handlePointerDown(PointerDownEvent event) {
-    if (widget.enabledCallback()) _recognizer.addPointer(event);
+  bool _isPointerOverHorizontalScrollable(PointerDownEvent event) {
+    final renderBox = context.findRenderObject();
+    if (renderBox is! RenderBox) return false;
+    final local = renderBox.globalToLocal(event.position);
+    final result = BoxHitTestResult();
+    renderBox.hitTest(result, position: local);
+    for (final entry in result.path) {
+      final target = entry.target;
+      final typeName = target.runtimeType.toString();
+      // 常见 RenderObject 名称判断（兼容多种情况）
+      if (typeName.contains('RenderScrollable') ||
+          typeName.contains('RenderViewport') ||
+          typeName.contains('RenderSliverFillViewport') ||
+          typeName.contains('RenderPointerListener')) {
+        // 进一步可按需要检测方向，但大多数水平控件会出现在 PageView/TabBarView 的渲染树
+        return true;
+      }
+    }
+    return false;
   }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (!widget.enabledCallback()) return;
+
+    // 仅在边缘区域内尝试激活侧滑手势
+    // （Listener 本身就只覆盖了边缘区域，但这里再做一次双重确认）
+    final RenderBox box = context.findRenderObject() as RenderBox;
+    final local = box.globalToLocal(event.position);
+    if (local.dx < 0 || local.dx > box.size.width || local.dy < 0 || local.dy > box.size.height) {
+      return;
+    }
+
+    // 如果点击处存在水平滚动/分页控件，则忽略侧滑，避免误触
+    if (_isPointerOverHorizontalScrollable(event)) {
+      return;
+    }
+
+    // 其它情况下把指针交给自定义的水平拖拽识别器
+    _recognizer.addPointer(event);
+  }
+
+  // void _handlePointerDown(PointerDownEvent event) {
+  //   if (widget.enabledCallback()) _recognizer.addPointer(event);
+  // }
 }
 
 mixin GetPageRouteTransitionMixin<T> on PageRoute<T> {
