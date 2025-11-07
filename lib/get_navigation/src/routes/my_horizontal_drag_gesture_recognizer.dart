@@ -9,8 +9,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/scheduler.dart';
 
-
-
 export 'dart:ui' show PointerDeviceKind;
 
 export 'package:flutter/foundation.dart' show DiagnosticPropertiesBuilder;
@@ -320,13 +318,16 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
   DragEndDetails? _considerFling(VelocityEstimate estimate, PointerDeviceKind kind);
 
   Offset _getDeltaForDetails(Offset delta);
+
   double? _getPrimaryValueFromOffset(Offset value);
 
   /// The axis (horizontal or vertical) corresponding to the primary drag direction.
   ///
   /// The [PanGestureRecognizer] returns null.
   _DragDirection? _getPrimaryDragAxis() => null;
+
   bool _hasSufficientGlobalDistanceToAccept(PointerDeviceKind pointerDeviceKind, double? deviceTouchSlop);
+
   bool _hasDragThresholdBeenMet = false;
 
   final Map<int, VelocityTracker> _velocityTrackers = <int, VelocityTracker>{};
@@ -345,11 +346,7 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
   @override
   bool isPointerAllowed(PointerEvent event) {
     if (_initialButtons == null) {
-      if (onDown == null &&
-          onStart == null &&
-          onUpdate == null &&
-          onEnd == null &&
-          onCancel == null) {
+      if (onDown == null && onStart == null && onUpdate == null && onEnd == null && onCancel == null) {
         return false;
       }
     } else {
@@ -523,7 +520,7 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
       return localDelta;
     }
 
-    final double dx,dy;
+    final double dx, dy;
     if (axis == _DragDirection.horizontal) {
       dx = _resolveDelta(pointer: pointer, axis: _DragDirection.horizontal, localDelta: localDelta);
       assert(dx.abs() <= localDelta.dx.abs());
@@ -615,12 +612,15 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
       _giveUpPointer(event.pointer);
       return;
     }
-    if ((event is PointerMoveEvent || event is PointerPanZoomUpdateEvent)
-        && _shouldTrackMoveEvent(event.pointer)) {
+    if ((event is PointerMoveEvent || event is PointerPanZoomUpdateEvent) && _shouldTrackMoveEvent(event.pointer)) {
       final Offset delta = (event is PointerMoveEvent) ? event.delta : (event as PointerPanZoomUpdateEvent).panDelta;
-      final Offset localDelta = (event is PointerMoveEvent) ? event.localDelta : (event as PointerPanZoomUpdateEvent).localPanDelta;
-      final Offset position = (event is PointerMoveEvent) ? event.position : (event.position + (event as PointerPanZoomUpdateEvent).pan);
-      final Offset localPosition = (event is PointerMoveEvent) ? event.localPosition : (event.localPosition + (event as PointerPanZoomUpdateEvent).localPan);
+      final Offset localDelta =
+      (event is PointerMoveEvent) ? event.localDelta : (event as PointerPanZoomUpdateEvent).localPanDelta;
+      final Offset position =
+      (event is PointerMoveEvent) ? event.position : (event.position + (event as PointerPanZoomUpdateEvent).pan);
+      final Offset localPosition = (event is PointerMoveEvent)
+          ? event.localPosition
+          : (event.localPosition + (event as PointerPanZoomUpdateEvent).localPan);
       _finalPosition = OffsetPair(local: localPosition, global: position);
       final Offset resolvedDelta = _resolveLocalDeltaForMultitouch(event.pointer, localDelta);
       switch (_state) {
@@ -634,8 +634,9 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
           _globalDistanceMoved += PointerEvent.transformDeltaViaPositions(
               transform: localToGlobalTransform,
               untransformedDelta: movedLocally,
-              untransformedEndPosition: localPosition
-          ).distance * (_getPrimaryValueFromOffset(movedLocally) ?? 1).sign;
+              untransformedEndPosition: localPosition)
+              .distance *
+              (_getPrimaryValueFromOffset(movedLocally) ?? 1).sign;
           if (_hasSufficientGlobalDistanceToAccept(event.kind, gestureSettings?.touchSlop)) {
             _hasDragThresholdBeenMet = true;
             if (_acceptedActivePointers.contains(event.pointer)) {
@@ -656,7 +657,7 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
       }
       _recordMoveDeltaForMultitouch(event.pointer, localDelta);
     }
-    if(event is PointerCancelEvent || event is PointerPanZoomEndEvent || event is PointerUpEvent) {
+    if (event is PointerCancelEvent || event is PointerPanZoomEndEvent || event is PointerUpEvent) {
       _giveUpPointer(event.pointer);
     }
     // if (event case PointerUpEvent() || PointerCancelEvent() || PointerPanZoomEndEvent()) {
@@ -665,6 +666,7 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
   }
 
   final List<int> _acceptedActivePointers = <int>[];
+
   // This value is used when the multitouch strategy is `latestPointer`,
   // it keeps track of the last accepted pointer. If this active pointer
   // leave up, it will be set to the first accepted pointer.
@@ -717,8 +719,7 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
 
     _moveDeltaBeforeFrame.remove(pointer);
     if (_activePointer == pointer) {
-      _activePointer =
-      _acceptedActivePointers.isNotEmpty ? _acceptedActivePointers.first : null;
+      _activePointer = _acceptedActivePointers.isNotEmpty ? _acceptedActivePointers.first : null;
     }
   }
 
@@ -846,6 +847,7 @@ abstract class DragGestureRecognizer extends OneSequenceGestureRecognizer {
     _velocityTrackers.clear();
     super.dispose();
   }
+
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
@@ -931,10 +933,20 @@ class MyHorizontalDragGestureRecognizer extends DragGestureRecognizer {
     super.debugOwner,
     super.supportedDevices,
     super.allowedButtonsFilter,
+    this.shouldBlockFling,
   });
+
+  /// 回调函数，用于检查是否应该阻止 fling 手势
+  /// 返回 true 时会阻止 fling（例如在 PageView/TabBarView 上）
+  final bool Function()? shouldBlockFling;
 
   @override
   bool isFlingGesture(VelocityEstimate estimate, PointerDeviceKind kind) {
+    // 如果在 PageView/TabBarView 上，阻止 fling 手势
+    if (shouldBlockFling?.call() == true) {
+      return false;
+    }
+
     final double minVelocity = minFlingVelocity ?? kMinFlingVelocity;
     final double minDistance = minFlingDistance ?? computeHitSlop(kind, gestureSettings);
     return estimate.pixelsPerSecond.dx.abs() > minVelocity && estimate.offset.dx.abs() > minDistance;
@@ -957,7 +969,8 @@ class MyHorizontalDragGestureRecognizer extends DragGestureRecognizer {
 
   @override
   bool _hasSufficientGlobalDistanceToAccept(PointerDeviceKind pointerDeviceKind, double? deviceTouchSlop) {
-    return (_globalDistanceMoved.toInt() > 0) &&  _globalDistanceMoved.abs() > computeHitSlop(pointerDeviceKind, gestureSettings);
+    return (_globalDistanceMoved.toInt() > 0) &&
+        _globalDistanceMoved.abs() > computeHitSlop(pointerDeviceKind, gestureSettings);
   }
 
   @override
@@ -994,8 +1007,8 @@ class PanGestureRecognizer extends DragGestureRecognizer {
   bool isFlingGesture(VelocityEstimate estimate, PointerDeviceKind kind) {
     final double minVelocity = minFlingVelocity ?? kMinFlingVelocity;
     final double minDistance = minFlingDistance ?? computeHitSlop(kind, gestureSettings);
-    return estimate.pixelsPerSecond.distanceSquared > minVelocity * minVelocity
-        && estimate.offset.distanceSquared > minDistance * minDistance;
+    return estimate.pixelsPerSecond.distanceSquared > minVelocity * minVelocity &&
+        estimate.offset.distanceSquared > minDistance * minDistance;
   }
 
   @override
