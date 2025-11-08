@@ -237,7 +237,9 @@ class CupertinoBackGestureDetectorState<T> extends State<CupertinoBackGestureDet
       // PageView 使用 _RenderSliverFillViewport
       // TabBarView 也使用 _RenderSliverFillViewport
       // 排除 ListView 相关的 RenderSliver (RenderSliverList, RenderSliverGrid 等)
-      if (typeName.contains('RenderSliverFillViewport') || typeName.contains('_RenderPageView')) {
+      if (typeName.contains('RenderSliverFillViewport') ||
+          typeName.contains('_RenderPageView') ||
+          typeName.contains('RenderNestedScrollViewViewport')) {
         return true;
       }
     }
