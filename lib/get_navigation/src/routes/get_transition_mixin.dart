@@ -231,16 +231,21 @@ class CupertinoBackGestureDetectorState<T> extends State<CupertinoBackGestureDet
     renderBox.hitTest(result, position: local);
     for (final entry in result.path) {
       final target = entry.target;
-      final typeName = target.runtimeType.toString();
-
-      // 只判断 PageView/TabBarView 相关的 RenderObject
-      // PageView 使用 _RenderSliverFillViewport
-      // TabBarView 也使用 _RenderSliverFillViewport
-      // 排除 ListView 相关的 RenderSliver (RenderSliverList, RenderSliverGrid 等)
-      if (typeName.contains('RenderSliverFillViewport') ||
-          typeName.contains('_RenderPageView') ||
-          typeName.contains('RenderNestedScrollViewViewport')) {
+      // 使用类型检查而不是字符串比较,避免混淆问题
+      // PageView/TabBarView 使用 RenderSliverFillViewport
+      if (target is RenderSliverFillViewport) {
         return true;
+      }
+      // 检查是否实现了 RenderAbstractViewport (NestedScrollView等)
+      if (target is RenderAbstractViewport) {
+        // 但排除垂直滚动的情况,检查是否有水平滚动能力
+        // 通过检查父级或相关属性来判断
+        if (target is RenderViewportBase) {
+          final axis = target.axis;
+          if (axis == Axis.horizontal) {
+            return true;
+          }
+        }
       }
     }
     return false;
