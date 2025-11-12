@@ -221,18 +221,54 @@ class CupertinoBackGestureDetectorState<T> extends State<CupertinoBackGestureDet
     final local = renderBox.globalToLocal(event.position);
     final result = BoxHitTestResult();
     renderBox.hitTest(result, position: local);
+
+    // 遍历 HitTest 路径，检查点击位置上的渲染对象
+    // 只有手指真正点击在横向滚动控件的区域内，才会在 HitTest 路径中出现
     for (final entry in result.path) {
       final target = entry.target;
-      final typeName = target.runtimeType.toString();
-      // 常见 RenderObject 名称判断（兼容多种情况）
-      if (typeName.contains('RenderScrollable') ||
-          typeName.contains('RenderViewport') ||
-          typeName.contains('RenderSliverFillViewport') ||
-          typeName.contains('RenderPointerListener')) {
-        // 进一步可按需要检测方向，但大多数水平控件会出现在 PageView/TabBarView 的渲染树
-        return true;
+
+      // 方法1: 检查 RenderViewport 的滚动方向
+      if (target is RenderViewport) {
+        if (target.axisDirection == AxisDirection.left ||
+            target.axisDirection == AxisDirection.right) {
+          return true;
+        }
       }
+
+      // 方法2: 检查是否为 RenderAbstractViewport (TabBar 等使用)
+      if (target is RenderAbstractViewport) {
+        // TabBar 的 _RenderSingleChildViewport 是 RenderAbstractViewport 的子类
+        // 但不是 RenderViewport，直接判定为横向滚动
+        if (target is! RenderViewport) {
+          // _RenderSingleChildViewport 用于 TabBar，默认为横向
+          return true;
+        }
+
+        // 如果是其他类型，向上查找父级
+        RenderObject? current = target.parent;
+        while (current != null && current != renderBox) {
+          if (current is RenderViewport) {
+            if (current.axisDirection == AxisDirection.left ||
+                current.axisDirection == AxisDirection.right) {
+              return true;
+            }
+            break;
+          }
+          current = current.parent;
+        }
+      }
+
+      // 方法3: 通过类型名称匹配 TabBar (兼容性方案)
+      // 在 debug 模式下作为额外保障，release 模式下会被混淆但已有方法2兜底
+      // if (kDebugMode) {
+      //   final typeName = target.runtimeType.toString();
+      //   if (typeName.contains('TabLabelBar') ||
+      //       typeName.contains('SingleChildViewport')) {
+      //     return true;
+      //   }
+      // }
     }
+
     return false;
   }
 
@@ -251,7 +287,6 @@ class CupertinoBackGestureDetectorState<T> extends State<CupertinoBackGestureDet
     if (_isPointerOverHorizontalScrollable(event)) {
       return;
     }
-
     // 其它情况下把指针交给自定义的水平拖拽识别器
     _recognizer.addPointer(event);
   }
