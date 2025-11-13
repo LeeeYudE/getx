@@ -11,6 +11,21 @@ import '../../../get.dart';
 import 'default_transitions.dart';
 import 'my_horizontal_drag_gesture_recognizer.dart';
 
+/// Mixin for widgets that should allow back gesture despite being horizontally scrollable.
+///
+/// 用于标记横向滚动组件，表示该组件**不应该**拦截侧滑返回手势。
+///
+/// Example:
+/// ```dart
+/// class MyCustomHorizontalList extends StatelessWidget with AllowBackGesture {
+///   @override
+///   Widget build(BuildContext context) {
+///     return ListView(scrollDirection: Axis.horizontal, ...);
+///   }
+/// }
+/// ```
+mixin AllowBackGesture on Widget {}
+
 const double _kBackGestureWidth = 20.0;
 const int _kMaxDroppedSwipePageForwardAnimationTime = 800; // Screen widths per second.
 
@@ -223,53 +238,98 @@ class CupertinoBackGestureDetectorState<T> extends State<CupertinoBackGestureDet
     renderBox.hitTest(result, position: local);
 
     // 遍历 HitTest 路径，检查点击位置上的渲染对象
-    // 只有手指真正点击在横向滚动控件的区域内，才会在 HitTest 路径中出现
     for (final entry in result.path) {
       final target = entry.target;
+      // print('_isPointerOverHorizontalScrollable ${target.runtimeType.toString()}');
 
-      // 方法1: 检查 RenderViewport 的滚动方向
+      // 只处理 RenderObject 类型的 target
+      if (target is! RenderObject) continue;
+
+      // 方法1: 直接检查 RenderViewport 的滚动方向（PageView、ListView 等）
       if (target is RenderViewport) {
-        if (target.axisDirection == AxisDirection.left ||
-            target.axisDirection == AxisDirection.right) {
-          return true;
-        }
-      }
-
-      // 方法2: 检查是否为 RenderAbstractViewport (TabBar 等使用)
-      if (target is RenderAbstractViewport) {
-        // TabBar 的 _RenderSingleChildViewport 是 RenderAbstractViewport 的子类
-        // 但不是 RenderViewport，直接判定为横向滚动
-        if (target is! RenderViewport) {
-          // _RenderSingleChildViewport 用于 TabBar，默认为横向
-          return true;
-        }
-
-        // 如果是其他类型，向上查找父级
-        RenderObject? current = target.parent;
-        while (current != null && current != renderBox) {
-          if (current is RenderViewport) {
-            if (current.axisDirection == AxisDirection.left ||
-                current.axisDirection == AxisDirection.right) {
-              return true;
-            }
-            break;
+        final axis = target.axisDirection;
+        // print('  -> 发现 RenderViewport, axis: $axis');
+        if (axis == AxisDirection.left || axis == AxisDirection.right) {
+          // 检查是否有 AllowBackGesture mixin
+          final element = _findElementForRenderObject(target);
+          if (element != null && _hasAllowBackGesture(element)) {
+            // print('  -> 该组件使用了 AllowBackGesture，允许侧滑');
+            continue; // 跳过，不拦截
           }
-          current = current.parent;
+          // print('  -> 检测到横向滚动（RenderViewport），拦截侧滑');
+          return true;
         }
       }
 
-      // 方法3: 通过类型名称匹配 TabBar (兼容性方案)
-      // 在 debug 模式下作为额外保障，release 模式下会被混淆但已有方法2兜底
-      // if (kDebugMode) {
-      //   final typeName = target.runtimeType.toString();
-      //   if (typeName.contains('TabLabelBar') ||
-      //       typeName.contains('SingleChildViewport')) {
-      //     return true;
-      //   }
-      // }
+      // 方法2: 通用方案 - 从任何 RenderObject 查找其所属的 Scrollable
+      // 这能处理各种情况：TabBar 静止、TabBar 滚动、PageView 等
+      final element = _findElementForRenderObject(target);
+      if (element != null) {
+        // print('  -> 找到对应的 Element: ${element.widget.runtimeType}');
+
+        // 检查当前 Widget 是否使用了 AllowBackGesture
+        if (_hasAllowBackGesture(element)) {
+          // print('  -> 该组件使用了 AllowBackGesture，允许侧滑');
+          continue; // 跳过，不拦截
+        }
+
+        // 向上查找最近的 Scrollable Widget
+        final scrollable = element.findAncestorWidgetOfExactType<Scrollable>();
+        if (scrollable != null) {
+          final axis = scrollable.axisDirection;
+          // print('  -> 找到 Scrollable, axis: $axis');
+          if (axis == AxisDirection.left || axis == AxisDirection.right) {
+            // print('  -> 检测到横向滚动（Scrollable），拦截侧滑');
+            return true;
+          }
+        }
+      }
     }
 
+    print('_isPointerOverHorizontalScrollable 结果: false');
     return false;
+  }
+
+  // 检查 Element 或其祖先是否使用了 AllowBackGesture mixin
+  bool _hasAllowBackGesture(Element element) {
+    // 检查当前 Widget
+    if (element.widget is AllowBackGesture) {
+      return true;
+    }
+
+    // 向上查找祖先中是否有使用 AllowBackGesture 的 Widget
+    bool found = false;
+    element.visitAncestorElements((ancestor) {
+      if (ancestor.widget is AllowBackGesture) {
+        found = true;
+        return false; // 停止遍历
+      }
+      // 只向上查找 5 层，避免过度遍历
+      return ancestor.depth - element.depth < 5;
+    });
+    return found;
+  }
+
+  // 辅助方法：从 RenderObject 找到对应的 Element
+  // 使用更高效的方式：直接从当前 context 向下查找
+  Element? _findElementForRenderObject(RenderObject renderObject) {
+    Element? result;
+    void visitor(Element element) {
+      if (result != null) return; // 已找到，提前退出
+      if (element.renderObject == renderObject) {
+        result = element;
+        return;
+      }
+      element.visitChildren(visitor);
+    }
+
+    // 从根 context 开始查找
+    context.visitAncestorElements((element) {
+      element.visitChildElements(visitor);
+      return result == null; // 找到后停止遍历
+    });
+
+    return result;
   }
 
   void _handlePointerDown(PointerDownEvent event) {
@@ -285,8 +345,10 @@ class CupertinoBackGestureDetectorState<T> extends State<CupertinoBackGestureDet
 
     // 如果点击处存在水平滚动/分页控件，则忽略侧滑，避免误触
     if (_isPointerOverHorizontalScrollable(event)) {
+      print('_isPointerOverHorizontalScrollable true');
       return;
     }
+    print('_isPointerOverHorizontalScrollable false');
     // 其它情况下把指针交给自定义的水平拖拽识别器
     _recognizer.addPointer(event);
   }
