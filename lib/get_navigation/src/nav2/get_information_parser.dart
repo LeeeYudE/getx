@@ -17,16 +17,16 @@ class GetInformationParser extends RouteInformationParser<GetNavConfig> {
   ) {
     final uri = routeInformation.uri;
     var location = uri.toString();
-    if (location == '/') {
-      //check if there is a corresponding page
-      //if not, relocate to initialRoute
-      if (!Get.routeTree.routes.any((element) => element.name == '/')) {
-        location = initialRoute;
-      }
-    } else if (location.isEmpty) {
-      location = initialRoute;
-    }
-
+    // if (location == '/') {
+    //   //check if there is a corresponding page
+    //   //if not, relocate to initialRoute
+    //   if (!Get.routeTree.routes.any((element) => element.name == '/')) {
+    //     location = initialRoute;
+    //   }
+    // } else if (location.isEmpty) {
+    //   location = initialRoute;
+    // }
+    location = initialRoute;
     Get.log('GetInformationParser: route location: $location');
 
     final matchResult = Get.routeTree.matchRoute(location);
